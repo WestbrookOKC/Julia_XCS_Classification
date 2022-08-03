@@ -1,0 +1,118 @@
+using PyCall
+using Plots
+
+accuracy = [] # for later plots
+
+py"""
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+#   min    max    gap
+# V1 -6.9   6.5   12  / 4 3
+# V2 -13.7  12.9  26  / 4 5
+# V3 -5.2  17.9   24  / 4 5
+# V4 -8.5  2.4    10  /4  3
+import os
+import csv 
+import pickle
+import random
+import xcs
+from xcs import XCSAlgorithm
+from xcs.scenarios import MUXProblem, ScenarioObserver
+import logging
+logging.root.setLevel(logging.INFO)
+import random
+from xcs.scenarios import Scenario
+from xcs.bitstrings import BitString
+df = pd.read_csv("/Users/fengkaiqi/Desktop/Julia/hw2-fkq-real_or_fake_money/Data/traindata.csv")
+df.head(5)
+df["V1"] = pd.cut(df["V1"],3,labels=[0,1,2]) # V1 gap is 12  /4 = 3
+df["V2"] = pd.cut(df["V2"],5,labels=[0,1,2,3,4])# V2 gap is 26 /4 = 5
+df["V3"] = pd.cut(df["V3"],5,labels=[0,1,2,3,4])# V3 gap is 24 /4 = 5
+df["V4"] = pd.cut(df["V4"],3,labels=[0,1,2])# V4 gap is 10 /4 = 3
+#print(df.head(960))
+df1 = pd.get_dummies(df["V1"], prefix = 'V1')# it is like V1_1 V1_2 V1_3 V1_4.....
+df2 = pd.get_dummies(df["V2"], prefix = 'V2')
+df3 = pd.get_dummies(df["V3"], prefix = 'V3')
+df4 = pd.get_dummies(df["V4"], prefix = 'V4')
+DataFrame = pd.concat([df["Class"],df1, df2,df3,df4], axis=1)
+#print(DataFrame.head(1))
+pid_dataset = DataFrame.values
+arr = []
+for i in range(len(pid_dataset)):
+    arr.append(''.join([str(x) for x in pid_dataset[i]]))
+
+class Money(Scenario):
+    def __init__(self, training_cycles=10000, input_size=500, inputs=[]):
+        self.input_size = input_size
+        self.possible_actions = (1, 0) # we have two class, one for true money, zero for fake money
+        self.initial_training_cycles = training_cycles
+        self.remaining_cycles = training_cycles
+        self.needle_index = random.randrange(input_size)
+        self.needle_value = None
+        self.inputs = inputs
+    
+    @property
+    def is_dynamic(self):
+        return False
+        
+    def get_possible_actions(self):
+        return self.possible_actions
+    
+    def reset(self):
+        self.remaining_cycles = self.initial_training_cycles
+        self.needle_index = random.randrange(self.input_size)
+        
+    def more(self):
+        return self.remaining_cycles > 0
+    
+    def sense(self):
+        random.seed()
+        i = random.randint(0,len(self.inputs) - 1)
+        c_feat = BitString(self.inputs[i][:-1])
+        self.needle_value = self.inputs[i][-1]
+        return c_feat
+        
+    def execute(self, action):
+        self.remaining_cycles -= 1
+        return int(action) == int(self.needle_value)
+
+inp = len(arr[0])-1
+problem = Money(training_cycles=10000, input_size=inp, inputs = arr)
+
+algorithm = xcs.XCSAlgorithm()
+
+# Default parameter settings in test()
+algorithm.exploration_probability = .1
+algorithm.discount_factor = 0
+algorithm.do_ga_subsumption = True
+algorithm.do_action_set_subsumption = True
+
+# Modified parameter settings
+algorithm.ga_threshold = 1
+algorithm.crossover_probability = .5
+algorithm.wildcard_probability = .5
+algorithm.deletion_threshold = 2 
+algorithm.subsumption_threshold = 10        
+algorithm.mutation_probability = .003
+
+model = algorithm.new_model(ScenarioObserver(problem))
+history = model.run(ScenarioObserver(problem), learn=True)
+acc = []
+def getAcc(acc):
+    for a in model:
+        acc.append(a.fitness)
+    return acc
+    
+print(model)
+for rule in model:
+    if rule.fitness > .5 and rule.experience >= 10:
+        print(rule.condition, '=>', rule.action, ' [%.5f]' % rule.fitness)
+
+"""
+accuracy = py"getAcc"(accuracy)
+accuracy = sort(accuracy)
+function show_accuracy()
+    plot!(1:length(accuracy), accuracy, label = "accuracy")
+    plot!(xlabel = "Iteration")
+end
+show_accuracy()
